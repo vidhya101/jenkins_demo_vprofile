@@ -29,35 +29,6 @@ pipeline {
         PATH = "${JAVA_HOME}/bin:${PATH}"
         BUILD_TIMESTAMP = new Date().format('yyyy-MM-dd_HH-mm-ss')
     }
-    
-    stages {
-        stage('System Check') {
-            steps {
-                script {
-                    try {
-                        sh '''
-                            echo "System Diagnostics:"
-                            echo "-------------------"
-                            echo "Current User: $(whoami)"
-                            echo "HOME Directory: $HOME"
-                            echo "JAVA_HOME: $JAVA_HOME"
-                            echo "PATH: $PATH"
-                            
-                            which java
-                            java -version
-                            which mvn
-                            mvn --version
-                            
-                            echo "Directory Contents of JAVA_HOME:"
-                            ls -la $JAVA_HOME
-                        '''
-                    } catch (Exception e) {
-                        echo "Diagnostic check failed: ${e.getMessage()}"
-                        throw e
-                    }
-                }
-            }
-        }
         
         stage('Checkout') {
             steps {
