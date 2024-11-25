@@ -27,7 +27,7 @@ pipeline {
         BUILD_TIMESTAMP = new Date().format('yyyy-MM-dd_HH-mm-ss')
         DOCKER_IMAGE_NAME = 'vprofile-app'
         DOCKER_IMAGE_TAG = "${DOCKER_IMAGE_NAME}:${BUILD_TIMESTAMP}-${BUILD_NUMBER}"
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+        DOCKERHUB_CREDENTIALS = credentials('docker-cred')
     }
 
     stages {
