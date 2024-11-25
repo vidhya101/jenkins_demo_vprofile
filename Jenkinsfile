@@ -37,7 +37,7 @@ pipeline {
     stages {
         stage('Fetch Code') {
             steps {
-                git branch: 'atom', url: 'https://github.com/hkhcoder/vprofile-project.git'
+                git branch: 'main', url: 'https://github.com/vidhya101/jenkins_demo_vprofile.git'
             }
         }
 
