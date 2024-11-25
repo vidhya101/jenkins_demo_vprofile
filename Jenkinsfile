@@ -24,8 +24,8 @@ pipeline {
     }
 
     environment {
-        // Explicitly set JAVA_HOME 
-        JAVA_HOME = tool 'JDK17'
+         // Explicitly set JAVA_HOME to the detected path
+        JAVA_HOME = '/usr/lib/jvm/java-17-openjdk-amd64'
         // Add JAVA_HOME to PATH
         PATH = "${JAVA_HOME}/bin:${PATH}"
         BUILD_TIMESTAMP = new Date().format('yyyy-MM-dd_HH-mm-ss')
@@ -35,16 +35,6 @@ pipeline {
     }
 
     stages {
-          stage('Verify Java and Maven') {
-            steps {
-                // Verify Java and Maven are correctly set up
-                sh '''
-                    echo "JAVA_HOME: $JAVA_HOME"
-                    java -version
-                    mvn --version
-                '''
-            }
-        }
         stage('Fetch Code') {
             steps {
                 git branch: 'atom', url: 'https://github.com/hkhcoder/vprofile-project.git'
