@@ -5,12 +5,12 @@ def COLOR_MAP = [
 ]
 
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9-eclipse-temurin-17-alpine'
-            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
+  agent {
+    docker {
+      image 'abhishekf5/maven-abhishek-docker-agent:v1'
+      args '--user root -v /var/run/docker.sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
     }
+  }
     
     tools {
         maven "MAVEN3.9"
