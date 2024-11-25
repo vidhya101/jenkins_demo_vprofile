@@ -63,75 +63,77 @@ pipeline {
             }
         }
 
-        parallel {
-            stage('Unit Test') {
-                steps {
-                    script {
-                        try {
-                            sh '''
-                                mvn test -Dmaven.test.failure.ignore=true -X
-                            '''
-                        } catch (Exception e) {
-                            echo "Unit Test stage failed: ${e.getMessage()}"
-                            throw e
-                        }
-                    }
-                }
-                post {
-                    always {
-                        junit(
-                            allowEmptyResults: true,
-                            testResults: '**/target/surefire-reports/*.xml',
-                            skipPublishingChecks: true
-                        )
-                    }
-                }
-            }
-
-            stage('Checkstyle Analysis') {
-                steps {
-                    script {
-                        try {
-                            sh 'mvn checkstyle:checkstyle -X'
-                        } catch (Exception e) {
-                            echo "Checkstyle Analysis failed: ${e.getMessage()}"
-                        }
-                    }
-                }
-                post {
-                    always {
-                        recordIssues(
-                            enabledForFailure: true,
-                            tools: [checkStyle(pattern: '**/target/checkstyle-result.xml')]
-                        )
-                    }
-                }
-            }
-
-            stage('SonarQube Code Analysis') {
-                environment {
-                    scannerHome = tool 'sonar6.2'
-                    JAVA_OPTS = '-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.math=ALL-UNNAMED'
-                }
-                steps {
-                    withSonarQubeEnv('sonarserver') {
+        stage('Parallel Stages') {
+            parallel {
+                stage('Unit Test') {
+                    steps {
                         script {
                             try {
-                                sh """
-                                    export SONAR_SCANNER_OPTS="${JAVA_OPTS}"
-                                    ${scannerHome}/bin/sonar-scanner \
-                                    -Dsonar.projectKey=vprofile \
-                                    -Dsonar.projectName=vprofile-repo \
-                                    -Dsonar.projectVersion=${BUILD_NUMBER} \
-                                    -Dsonar.sources=src/ \
-                                    -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-                                    -Dsonar.junit.reportsPath=target/surefire-reports/ \
-                                    -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                                    -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
-                                """
+                                sh '''
+                                    mvn test -Dmaven.test.failure.ignore=true -X
+                                '''
                             } catch (Exception e) {
-                                echo "SonarQube Analysis failed: ${e.getMessage()}"
+                                echo "Unit Test stage failed: ${e.getMessage()}"
                                 throw e
+                            }
+                        }
+                    }
+                    post {
+                        always {
+                            junit(
+                                allowEmptyResults: true,
+                                testResults: '**/target/surefire-reports/*.xml',
+                                skipPublishingChecks: true
+                            )
+                        }
+                    }
+                }
+
+                stage('Checkstyle Analysis') {
+                    steps {
+                        script {
+                            try {
+                                sh 'mvn checkstyle:checkstyle -X'
+                            } catch (Exception e) {
+                                echo "Checkstyle Analysis failed: ${e.getMessage()}"
+                            }
+                        }
+                    }
+                    post {
+                        always {
+                            recordIssues(
+                                enabledForFailure: true,
+                                tools: [checkStyle(pattern: '**/target/checkstyle-result.xml')]
+                            )
+                        }
+                    }
+                }
+
+                stage('SonarQube Code Analysis') {
+                    environment {
+                        scannerHome = tool 'sonar6.2'
+                        JAVA_OPTS = '-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.math=ALL-UNNAMED'
+                    }
+                    steps {
+                        withSonarQubeEnv('sonarserver') {
+                            script {
+                                try {
+                                    sh """
+                                        export SONAR_SCANNER_OPTS="${JAVA_OPTS}"
+                                        ${scannerHome}/bin/sonar-scanner \
+                                        -Dsonar.projectKey=vprofile \
+                                        -Dsonar.projectName=vprofile-repo \
+                                        -Dsonar.projectVersion=${BUILD_NUMBER} \
+                                        -Dsonar.sources=src/ \
+                                        -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+                                        -Dsonar.junit.reportsPath=target/surefire-reports/ \
+                                        -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+                                        -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+                                    """
+                                } catch (Exception e) {
+                                    echo "SonarQube Analysis failed: ${e.getMessage()}"
+                                    throw e
+                                }
                             }
                         }
                     }
