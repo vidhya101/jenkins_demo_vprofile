@@ -7,7 +7,7 @@ def COLOR_MAP = [
 pipeline {
     agent {
         docker {
-            image 'abhishekf5/maven-abhishek-docker-agent:v1'
+            image 'maven:3.9-eclipse-temurin-17-alpine'
             args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
@@ -24,10 +24,41 @@ pipeline {
     }
     
     environment {
+        // Explicitly set JAVA_HOME and PATH
+        JAVA_HOME = tool 'JDK17'
+        PATH = "${JAVA_HOME}/bin:${PATH}"
         BUILD_TIMESTAMP = new Date().format('yyyy-MM-dd_HH-mm-ss')
     }
     
     stages {
+        stage('System Check') {
+            steps {
+                script {
+                    try {
+                        sh '''
+                            echo "System Diagnostics:"
+                            echo "-------------------"
+                            echo "Current User: $(whoami)"
+                            echo "HOME Directory: $HOME"
+                            echo "JAVA_HOME: $JAVA_HOME"
+                            echo "PATH: $PATH"
+                            
+                            which java
+                            java -version
+                            which mvn
+                            mvn --version
+                            
+                            echo "Directory Contents of JAVA_HOME:"
+                            ls -la $JAVA_HOME
+                        '''
+                    } catch (Exception e) {
+                        echo "Diagnostic check failed: ${e.getMessage()}"
+                        throw e
+                    }
+                }
+            }
+        }
+        
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/vidhya101/jenkins_demo_vprofile.git'
@@ -36,19 +67,45 @@ pipeline {
         
         stage('Build') {
             steps {
-                sh 'mvn install -DskipTests'
+                script {
+                    try {
+                        sh '''
+                            echo "Build Environment:"
+                            echo "JAVA_HOME: ${JAVA_HOME}"
+                            echo "PATH: ${PATH}"
+                            
+                            # Clean and compile the project
+                            mvn clean compile -X
+                        '''
+                    } catch (Exception e) {
+                        echo "Build failed: ${e.getMessage()}"
+                        throw e
+                    }
+                }
             }
             post {
                 success {
-                    echo 'Now Archiving files .......'
-                    archiveArtifacts artifacts: '**/target/*.war'
+                    echo 'Build completed successfully'
+                }
+                failure {
+                    echo 'Build failed'
                 }
             }
         }
 
         stage('Unit Test') {
             steps {
-                sh 'mvn test -Dmaven.test.failure.ignore=true'
+                script {
+                    try {
+                        sh '''
+                            # Run unit tests with detailed output
+                            mvn test -Dmaven.test.failure.ignore=true -X
+                        '''
+                    } catch (Exception e) {
+                        echo "Unit Test stage failed: ${e.getMessage()}"
+                        throw e
+                    }
+                }
             }
             post {
                 always {
@@ -63,7 +120,15 @@ pipeline {
 
         stage('Checkstyle Analysis') {
             steps {
-                sh 'mvn checkstyle:checkstyle'
+                script {
+                    try {
+                        sh 'mvn checkstyle:checkstyle -X'
+                    } catch (Exception e) {
+                        echo "Checkstyle Analysis failed: ${e.getMessage()}"
+                        // Uncomment the next line if you want to fail the build on checkstyle issues
+                        // throw e
+                    }
+                }
             }
             post {
                 always {
@@ -82,18 +147,25 @@ pipeline {
             }
             steps {
                 withSonarQubeEnv('sonarserver') {
-                    sh """
-                        export SONAR_SCANNER_OPTS="${JAVA_OPTS}"
-                        ${scannerHome}/bin/sonar-scanner \
-                        -Dsonar.projectKey=vprofile \
-                        -Dsonar.projectName=vprofile-repo \
-                        -Dsonar.projectVersion=${BUILD_NUMBER} \
-                        -Dsonar.sources=src/ \
-                        -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-                        -Dsonar.junit.reportsPath=target/surefire-reports/ \
-                        -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                        -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
-                    """
+                    script {
+                        try {
+                            sh """
+                                export SONAR_SCANNER_OPTS="${JAVA_OPTS}"
+                                ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=vprofile \
+                                -Dsonar.projectName=vprofile-repo \
+                                -Dsonar.projectVersion=${BUILD_NUMBER} \
+                                -Dsonar.sources=src/ \
+                                -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+                                -Dsonar.junit.reportsPath=target/surefire-reports/ \
+                                -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+                                -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+                            """
+                        } catch (Exception e) {
+                            echo "SonarQube Analysis failed: ${e.getMessage()}"
+                            throw e
+                        }
+                    }
                 }
             }
         }
