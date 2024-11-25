@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: vproapp
-        image: vprocontainers/vprofileapp
+        image: vprocontainers/vprofileapp:replaceImageTag
         imagePullPolicy: Always
         ports:
         - name: vproapp-port
