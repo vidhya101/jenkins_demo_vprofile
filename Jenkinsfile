@@ -131,52 +131,67 @@ pipeline {
         }
     }
 
-    post {
+  post {
         success {
-            emailext(
-                subject: "✅ [SUCCESS] Pipeline: ${JOB_NAME} - Build #${BUILD_NUMBER}",
+            emailext (
+                subject: "✅ [SUCCESS] Pipeline: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
                 body: """
-                    <h2>Build Successful!</h2>
-                    Pipeline: ${JOB_NAME}<br>
-                    Build Number: ${BUILD_NUMBER}<br>
-                    Build URL: <a href='${BUILD_URL}'>${BUILD_URL}</a><br>
-                    <h3>Stages Summary:</h3>
-                    - Unit Tests: Completed<br>
-                    - Checkstyle Analysis: Completed<br>
-                    - SonarQube Analysis: Passed<br>
-                    - Quality Gate: Passed<br>
+                    <html>
+                        <body>
+                            <h2>Build Successful!</h2>
+                            <p><strong>Pipeline:</strong> ${env.JOB_NAME}</p>
+                            <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
+                            <p><strong>Build ID:</strong> ${env.BUILD_ID}</p>
+                            <p><strong>Build URL:</strong> <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a></p>
+                            <p><strong>Build Timestamp:</strong> ${env.BUILD_TIMESTAMP}</p>
+                            <h3>Stages Summary:</h3>
+                            <ul>
+                                <li>Unit Tests: Completed</li>
+                                <li>Checkstyle Analysis: Completed</li>
+                                <li>SonarQube Analysis: Passed</li>
+                                <li>Quality Gate: Passed</li>
+                                <li>Artifact Upload: Successful</li>
+                            </ul>
+                            <p>Check console output for detailed information.</p>
+                        </body>
+                    </html>
                 """,
+                to: '$DEFAULT_RECIPIENTS',
                 mimeType: 'text/html',
-                to: '$DEFAULT_RECIPIENTS'
+                attachLog: true
             )
         }
-
+        
         failure {
-            emailext(
-                subject: "❌ [FAILED] Pipeline: ${JOB_NAME} - Build #${BUILD_NUMBER}",
+            emailext (
+                subject: "❌ [FAILED] Pipeline: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
                 body: """
-                    <h2 style='color: red;'>Build Failed!</h2>
-                    Pipeline: ${JOB_NAME}<br>
-                    Build Number: ${BUILD_NUMBER}<br>
-                    Failed Stage: ${currentBuild.result}<br>
-                    Check logs for details.<br>
+                    <html>
+                        <body>
+                            <h2 style="color: red;">Build Failed!</h2>
+                            <p><strong>Pipeline:</strong> ${env.JOB_NAME}</p>
+                            <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
+                            <p><strong>Build ID:</strong> ${env.BUILD_ID}</p>
+                            <p><strong>Build URL:</strong> <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a></p>
+                            <p><strong>Build Timestamp:</strong> ${env.BUILD_TIMESTAMP}</p>
+                            <p><strong>Failed Stage:</strong> ${currentBuild.result}</p>
+                            <p>Check console output attached for error details.</p>
+                            <h3>Last Successful Build:</h3>
+                            <p><strong>Build Number:</strong> ${currentBuild.previousSuccessfulBuild?.number ?: 'None'}</p>
+                        </body>
+                    </html>
                 """,
+                to: '$DEFAULT_RECIPIENTS',
                 mimeType: 'text/html',
-                to: '$DEFAULT_RECIPIENTS'
+                attachLog: true
             )
         }
-
+        
         always {
-            slackSend(
-                channel: '#devops-vidhya-ci',
+            echo 'Slack Notifications.'
+            slackSend channel: '#devops-vidhya-ci',
                 color: COLOR_MAP[currentBuild.currentResult],
-                message: "${currentBuild.currentResult}: Job ${JOB_NAME} Build #${BUILD_NUMBER}"
-            )
-
-            sh """
-                docker rmi ${DOCKER_IMAGE_TAG} || true
-                docker rmi ${DOCKERHUB_USER}/${DOCKER_IMAGE_TAG} || true
-            """
+                message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
         }
     }
 }
