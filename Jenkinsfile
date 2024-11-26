@@ -5,30 +5,19 @@ def COLOR_MAP = [
 ]
 
 pipeline {
-    agent {
-        docker {
-            image 'abhishekf5/maven-abhishek-docker-agent:v1'
-            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
-    
+    // Remove the Docker agent if not strictly necessary
+    agent any  // or specify appropriate agent configuration
+
     tools {
         maven "MAVEN3.9"
         jdk "JDK17"
     }
 
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        // Remove the other incorrectly placed environment settings
-    }
-
     environment {
-        JAVA_HOME = tool name: 'JDK17', type: 'JDK'
+        // Ensure JAVA_HOME is correctly set
+        JAVA_HOME = tool 'JDK17'
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
-        BUILD_TIMESTAMP = new Date().format('yyyy-MM-dd_HH-mm-ss')
-        DOCKER_IMAGE_NAME = 'vprofile-app'
-        DOCKER_IMAGE_TAG = "${DOCKER_IMAGE_NAME}:${BUILD_TIMESTAMP}-${BUILD_NUMBER}"
-        DOCKERHUB_CREDENTIALS = credentials('docker-cred')
+        // ... rest of your environment variables
     }
 
     stages {
