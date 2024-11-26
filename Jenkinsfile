@@ -19,6 +19,7 @@ pipeline {
 
     options {
         JAVA_HOME = tool name: 'JDK17', type: 'JDK'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}" // Add JDK bin to the PATH
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
         timeout(time: 2, unit: 'HOURS')
