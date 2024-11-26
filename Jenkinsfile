@@ -1,23 +1,28 @@
 def COLOR_MAP = [
-    'SUCCESS': 'good', 
+    'SUCCESS': 'good',
     'FAILURE': 'danger',
     'UNSTABLE': 'warning'
 ]
 
 pipeline {
-    // Remove the Docker agent if not strictly necessary
-    agent any  // or specify appropriate agent configuration
+    agent any
 
     tools {
-        maven "MAVEN3.9"
-        jdk "JDK17"
+        maven 'MAVEN3.9'
+        jdk 'JDK17'
     }
 
     environment {
         // Ensure JAVA_HOME is correctly set
         JAVA_HOME = tool 'JDK17'
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
-        // ... rest of your environment variables
+
+        // Make sure Docker and SonarQube environment variables are properly defined
+        DOCKER_IMAGE_TAG = "my-docker-image:${env.BUILD_NUMBER}"
+        DOCKERHUB_CREDENTIALS_USR = credentials('vidhya101')
+        DOCKERHUB_CREDENTIALS_PSW = credentials('RekhaGoel1_')
+        SONARQUBE_SCANNER = tool 'sonar6.2'
+        SONARQUBE_SERVER = 'sonarserver'
     }
 
     stages {
@@ -29,7 +34,10 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'mvn clean install -DskipTests'
+                script {
+                    // Ensure Maven is properly running
+                    sh 'mvn clean install -DskipTests'
+                }
             }
             post {
                 success {
@@ -40,7 +48,10 @@ pipeline {
 
         stage('Unit Tests') {
             steps {
-                sh 'mvn test -Dmaven.test.failure.ignore=true'
+                script {
+                    // Run tests, allowing failures without failing the build
+                    sh 'mvn test -Dmaven.test.failure.ignore=true'
+                }
             }
             post {
                 always {
@@ -55,7 +66,10 @@ pipeline {
 
         stage('Checkstyle Analysis') {
             steps {
-                sh 'mvn checkstyle:checkstyle'
+                script {
+                    // Ensure Checkstyle analysis works properly
+                    sh 'mvn checkstyle:checkstyle'
+                }
             }
             post {
                 always {
@@ -68,24 +82,22 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
-            environment {
-                scannerHome = tool 'sonar6.2'
-                JAVA_OPTS = '-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.math=ALL-UNNAMED'
-            }
             steps {
-                withSonarQubeEnv('sonarserver') {
-                    sh """
-                        export SONAR_SCANNER_OPTS="${JAVA_OPTS}"
-                        ${scannerHome}/bin/sonar-scanner \
-                        -Dsonar.projectKey=vprofile \
-                        -Dsonar.projectName=vprofile-repo \
-                        -Dsonar.projectVersion=1.0 \
-                        -Dsonar.sources=src/ \
-                        -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-                        -Dsonar.junit.reportsPath=target/surefire-reports/ \
-                        -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                        -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
-                    """
+                script {
+                    withSonarQubeEnv(SONARQUBE_SERVER) {
+                        sh """
+                            export SONAR_SCANNER_OPTS="-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.math=ALL-UNNAMED"
+                            ${SONARQUBE_SCANNER}/bin/sonar-scanner \
+                            -Dsonar.projectKey=vprofile \
+                            -Dsonar.projectName=vprofile-repo \
+                            -Dsonar.projectVersion=1.0 \
+                            -Dsonar.sources=src/ \
+                            -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+                            -Dsonar.junit.reportsPath=target/surefire-reports/ \
+                            -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+                            -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+                        """
+                    }
                 }
             }
         }
@@ -101,7 +113,7 @@ pipeline {
         stage('Prepare Dockerfile') {
             steps {
                 script {
-                    // Create a Dockerfile to package the WAR file
+                    // Create a Dockerfile dynamically
                     writeFile file: 'Dockerfile', text: '''
                     FROM tomcat:9-jdk17-openjdk-slim
                     COPY target/*.war /usr/local/tomcat/webapps/vprofile.war
@@ -115,6 +127,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
+                    // Ensure the Docker build process works correctly
                     sh """
                         docker build -t ${DOCKER_IMAGE_TAG} .
                         docker tag ${DOCKER_IMAGE_TAG} ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_TAG}
@@ -126,10 +139,11 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
+                    // Login to Docker Hub and push the image
                     sh """
                         echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
                         docker push ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_TAG}
-                        docker push ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_NAME}:latest
+                        docker push ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_TAG}:latest
                     """
                 }
             }
@@ -185,7 +199,7 @@ pipeline {
                 attachLog: true
             )
         }
-        
+
         failure {
             emailext (
                 subject: "❌ [FAILED] Pipeline: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
@@ -206,7 +220,7 @@ pipeline {
                 attachLog: true
             )
         }
-        
+
         always {
             echo 'Sending Slack Notifications'
             slackSend channel: '#devops-cicd',
