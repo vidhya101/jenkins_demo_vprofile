@@ -19,17 +19,10 @@ pipeline {
 
     options {
         JAVA_HOME = tool name: 'JDK17', type: 'JDK'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}" // Add JDK bin to the PATH
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        timestamps()
-        timeout(time: 2, unit: 'HOURS')
     }
 
     environment {
-         // Explicitly set JAVA_HOME to the detected path
-        JAVA_HOME = '/usr/lib/jvm/java-17-openjdk-amd64'
-        // Add JAVA_HOME to PATH
-        PATH = "${JAVA_HOME}/bin:${PATH}"
         BUILD_TIMESTAMP = new Date().format('yyyy-MM-dd_HH-mm-ss')
         DOCKER_IMAGE_NAME = 'vprofile-app'
         DOCKER_IMAGE_TAG = "${DOCKER_IMAGE_NAME}:${BUILD_TIMESTAMP}-${BUILD_NUMBER}"
