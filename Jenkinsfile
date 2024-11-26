@@ -18,6 +18,7 @@ pipeline {
     }
 
     options {
+        JAVA_HOME = tool name: 'JDK17', type: 'JDK'
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
         timeout(time: 2, unit: 'HOURS')
