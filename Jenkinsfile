@@ -16,8 +16,7 @@ pipeline {
         JAVA_HOME = tool 'JDK17'
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
         DOCKER_IMAGE_TAG = "my-docker-image:${BUILD_NUMBER}"
-        DOCKERHUB_USER = credentials('vidhya101')
-        DOCKERHUB_PASS = credentials('RekhaGoel1_')
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
         SONARQUBE_SCANNER = tool 'sonar6.2'
     }
 
@@ -34,7 +33,7 @@ pipeline {
             }
             post {
                 success {
-                    archiveArtifacts artifacts: '**/target/*.war'
+                    archiveArtifacts artifacts: '**/target/*.war', allowEmptyArchive: false
                 }
             }
         }
@@ -101,17 +100,19 @@ pipeline {
             steps {
                 sh """
                     docker build -t ${DOCKER_IMAGE_TAG} .
-                    docker tag ${DOCKER_IMAGE_TAG} ${DOCKERHUB_USER}/${DOCKER_IMAGE_TAG}
+                    docker tag ${DOCKER_IMAGE_TAG} ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_TAG}
                 """
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                sh """
-                    echo ${DOCKERHUB_PASS} | docker login -u ${DOCKERHUB_USER} --password-stdin
-                    docker push ${DOCKERHUB_USER}/${DOCKER_IMAGE_TAG}
-                """
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
+                    sh """
+                        echo ${DOCKERHUB_PASS} | docker login -u ${DOCKERHUB_USER} --password-stdin
+                        docker push ${DOCKERHUB_USER}/${DOCKER_IMAGE_TAG}
+                    """
+                }
             }
         }
 
@@ -131,9 +132,9 @@ pipeline {
         }
     }
 
-  post {
+    post {
         success {
-            emailext (
+            emailext(
                 subject: "✅ [SUCCESS] Pipeline: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
                 body: """
                     <html>
@@ -141,18 +142,8 @@ pipeline {
                             <h2>Build Successful!</h2>
                             <p><strong>Pipeline:</strong> ${env.JOB_NAME}</p>
                             <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
-                            <p><strong>Build ID:</strong> ${env.BUILD_ID}</p>
                             <p><strong>Build URL:</strong> <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a></p>
-                            <p><strong>Build Timestamp:</strong> ${env.BUILD_TIMESTAMP}</p>
-                            <h3>Stages Summary:</h3>
-                            <ul>
-                                <li>Unit Tests: Completed</li>
-                                <li>Checkstyle Analysis: Completed</li>
-                                <li>SonarQube Analysis: Passed</li>
-                                <li>Quality Gate: Passed</li>
-                                <li>Artifact Upload: Successful</li>
-                            </ul>
-                            <p>Check console output for detailed information.</p>
+                            <p>Check console output for details.</p>
                         </body>
                     </html>
                 """,
@@ -161,23 +152,17 @@ pipeline {
                 attachLog: true
             )
         }
-        
+
         failure {
-            emailext (
+            emailext(
                 subject: "❌ [FAILED] Pipeline: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
                 body: """
                     <html>
                         <body>
-                            <h2 style="color: red;">Build Failed!</h2>
+                            <h2>Build Failed!</h2>
                             <p><strong>Pipeline:</strong> ${env.JOB_NAME}</p>
                             <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
-                            <p><strong>Build ID:</strong> ${env.BUILD_ID}</p>
                             <p><strong>Build URL:</strong> <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a></p>
-                            <p><strong>Build Timestamp:</strong> ${env.BUILD_TIMESTAMP}</p>
-                            <p><strong>Failed Stage:</strong> ${currentBuild.result}</p>
-                            <p>Check console output attached for error details.</p>
-                            <h3>Last Successful Build:</h3>
-                            <p><strong>Build Number:</strong> ${currentBuild.previousSuccessfulBuild?.number ?: 'None'}</p>
                         </body>
                     </html>
                 """,
@@ -186,12 +171,13 @@ pipeline {
                 attachLog: true
             )
         }
-        
+
         always {
-            echo 'Slack Notifications.'
-            slackSend channel: '#devops-vidhya-ci',
-                color: COLOR_MAP[currentBuild.currentResult],
+            slackSend(
+                channel: '#devops-vidhya-ci',
+                color: COLOR_MAP[currentBuild.currentResult] ?: 'warning',
                 message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+            )
         }
     }
 }
