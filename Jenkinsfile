@@ -3,6 +3,7 @@ def COLOR_MAP = [
     'SUCCESS': 'good', 
     'FAILURE': 'danger',
 ]
+
 pipeline {
     agent any
     
@@ -74,9 +75,8 @@ pipeline {
                 JAVA_OPTS = '-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.math=ALL-UNNAMED'
             }
             steps {
-                script{
+                script {
                     sonarscanner()
-                }
                 }
             }
         }
@@ -109,6 +109,7 @@ pipeline {
             }
         }
     }
+
     post {
         success {
             emailext (
