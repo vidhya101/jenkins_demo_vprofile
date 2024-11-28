@@ -68,16 +68,18 @@ pipeline {
         stage('CODE ANALYSIS with SONARQUBE') {
             steps {
                 // Using shared library method for Sonar Analysis
-                sonarAnalysis(
-                    projectKey: 'vprofile',
-                    projectName: 'vprofile-repo',
-                    projectVersion: '1.0',
-                    sources: 'src/',
-                    binaries: 'target/test-classes/com/visualpathit/account/controllerTest/',
-                    junitReports: 'target/surefire-reports/',
-                    jacocoReports: 'target/jacoco.exec',
-                    checkstyleReports: 'target/checkstyle-result.xml'
-                )
+                script {
+                    sonarAnalysis(
+                        projectKey: 'vprofile',
+                        projectName: 'vprofile-repo',
+                        projectVersion: '1.0',
+                        sources: 'src/',
+                        binaries: 'target/test-classes/com/visualpathit/account/controllerTest/',
+                        junitReports: 'target/surefire-reports/',
+                        jacocoReports: 'target/jacoco.exec',
+                        checkstyleReports: 'target/checkstyle-result.xml'
+                    )
+                }
             }
         }
 
@@ -92,21 +94,23 @@ pipeline {
         stage("UploadArtifact") {
             steps {
                 // Using shared library method for Nexus Upload
-                nexusUpload(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: '192.168.56.21:8081',
-                    groupId: 'QA',
-                    version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
-                    repository: 'vprofile-central-repo',
-                    credentialsId: 'nexuslogin',
-                    artifacts: [
-                        [artifactId: 'vproapp',
-                         classifier: '',
-                         file: 'target/vprofile-v2.war',
-                         type: 'war']
-                    ]
-                )
+                script {
+                    nexusUpload(
+                        nexusVersion: 'nexus3',
+                        protocol: 'http',
+                        nexusUrl: '192.168.56.21:8081',
+                        groupId: 'QA',
+                        version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
+                        repository: 'vprofile-central-repo',
+                        credentialsId: 'nexuslogin',
+                        artifacts: [
+                            [artifactId: 'vproapp',
+                             classifier: '',
+                             file: 'target/vprofile-v2.war',
+                             type: 'war']
+                        ]
+                    )
+                }
             }
         }
     }
@@ -114,17 +118,23 @@ pipeline {
     post {
         success {
             // Using shared library method for Success Email
-            emailNotification.success()
+            script {
+                emailNotification.success()
+            }
         }
         
         failure {
             // Using shared library method for Failure Email
-            emailNotification.failure()
+            script {
+                emailNotification.failure()
+            }
         }
         
         always {
             // Using shared library method for Slack Notification
-            slackNotification(channel: '#devops-vidhya-ci')
+            script {
+                slackNotification(channel: '#devops-vidhya-ci')
+            }
         }
     }
 }
