@@ -1,60 +1,50 @@
+@Library("my_shared_library") _
 def COLOR_MAP = [
-    'SUCCESS': 'good',
+    'SUCCESS': 'good', 
     'FAILURE': 'danger',
-    'UNSTABLE': 'warning'
 ]
-
 pipeline {
     agent any
-
+    
     tools {
-        maven 'MAVEN3.9'
-        jdk 'JDK17'
+        maven "MAVEN3.9"
+        jdk "JDK17"
+    }
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
     }
 
     environment {
-        // Ensure JAVA_HOME is correctly set
-        JAVA_HOME = tool 'JDK17'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
-
-        // Make sure Docker and SonarQube environment variables are properly defined
-        DOCKER_IMAGE_TAG = "my-docker-image:${env.BUILD_NUMBER}"
-        DOCKERHUB_CREDENTIALS_USR = credentials('vidhya101')
-        DOCKERHUB_CREDENTIALS_PSW = credentials('RekhaGoel1_')
-        SONARQUBE_SCANNER = tool 'sonar6.2'
-        SONARQUBE_SERVER = 'sonarserver'
+        BUILD_TIMESTAMP = new Date().format('yyyy-MM-dd_HH-mm-ss')
     }
 
     stages {
-        stage('Fetch Code') {
+        stage('Fetch code') {
             steps {
                 git branch: 'atom', url: 'https://github.com/hkhcoder/vprofile-project.git'
             }
         }
-
         stage('Build') {
             steps {
-                script {
-                    // Ensure Maven is properly running
-                    sh 'mvn clean install -DskipTests'
-                }
+                sh 'mvn install -DskipTests'
             }
             post {
                 success {
+                    echo 'Now Archiving this files .......'
                     archiveArtifacts artifacts: '**/target/*.war'
                 }
             }
         }
 
-        stage('Unit Tests') {
+        stage('UNIT TEST') {
             steps {
-                script {
-                    // Run tests, allowing failures without failing the build
-                    sh 'mvn test -Dmaven.test.failure.ignore=true'
-                }
+                // Added -Dmaven.test.failure.ignore=true to ensure test results are generated even if tests fail
+                sh 'mvn test -Dmaven.test.failure.ignore=true'
             }
             post {
                 always {
+                    // More specific path for test results and allowEmptyResults to prevent failure if no tests
                     junit(
                         allowEmptyResults: true,
                         testResults: '**/target/surefire-reports/*.xml',
@@ -66,10 +56,7 @@ pipeline {
 
         stage('Checkstyle Analysis') {
             steps {
-                script {
-                    // Ensure Checkstyle analysis works properly
-                    sh 'mvn checkstyle:checkstyle'
-                }
+                sh 'mvn checkstyle:checkstyle'
             }
             post {
                 always {
@@ -81,28 +68,30 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('CODE ANALYSIS with SONARQUBE') {
+            environment {
+                scannerHome = tool 'sonar6.2'
+                JAVA_OPTS = '-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.math=ALL-UNNAMED'
+            }
             steps {
-                script {
-                    withSonarQubeEnv(SONARQUBE_SERVER) {
-                        sh """
-                            export SONAR_SCANNER_OPTS="-XX:+EnableDynamicAgentLoading --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED --add-opens java.base/java.math=ALL-UNNAMED"
-                            ${SONARQUBE_SCANNER}/bin/sonar-scanner \
-                            -Dsonar.projectKey=vprofile \
-                            -Dsonar.projectName=vprofile-repo \
-                            -Dsonar.projectVersion=1.0 \
-                            -Dsonar.sources=src/ \
-                            -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-                            -Dsonar.junit.reportsPath=target/surefire-reports/ \
-                            -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                            -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
-                        """
-                    }
+                withSonarQubeEnv('sonarserver') {
+                    sh """
+                        export SONAR_SCANNER_OPTS="${JAVA_OPTS}"
+                        ${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=vprofile \
+                        -Dsonar.projectName=vprofile-repo \
+                        -Dsonar.projectVersion=1.0 \
+                        -Dsonar.sources=src/ \
+                        -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+                        -Dsonar.junit.reportsPath=target/surefire-reports/ \
+                        -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+                        -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+                    """
                 }
             }
         }
 
-        stage('Quality Gate') {
+        stage("Quality Gate") {
             steps {
                 timeout(time: 1, unit: 'HOURS') {
                     waitForQualityGate abortPipeline: true
@@ -110,46 +99,7 @@ pipeline {
             }
         }
 
-        stage('Prepare Dockerfile') {
-            steps {
-                script {
-                    // Create a Dockerfile dynamically
-                    writeFile file: 'Dockerfile', text: '''
-                    FROM tomcat:9-jdk17-openjdk-slim
-                    COPY target/*.war /usr/local/tomcat/webapps/vprofile.war
-                    EXPOSE 8080
-                    CMD ["catalina.sh", "run"]
-                    '''
-                }
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    // Ensure the Docker build process works correctly
-                    sh """
-                        docker build -t ${DOCKER_IMAGE_TAG} .
-                        docker tag ${DOCKER_IMAGE_TAG} ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_TAG}
-                    """
-                }
-            }
-        }
-
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    // Login to Docker Hub and push the image
-                    sh """
-                        echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
-                        docker push ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_TAG}
-                        docker push ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_TAG}:latest
-                    """
-                }
-            }
-        }
-
-        stage('Nexus Artifact Upload') {
+        stage("UploadArtifact") {
             steps {
                 nexusArtifactUploader(
                     nexusVersion: 'nexus3',
@@ -169,7 +119,6 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             emailext (
@@ -180,14 +129,15 @@ pipeline {
                             <h2>Build Successful!</h2>
                             <p><strong>Pipeline:</strong> ${env.JOB_NAME}</p>
                             <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
-                            <p><strong>Docker Image:</strong> ${DOCKER_IMAGE_TAG}</p>
+                            <p><strong>Build ID:</strong> ${env.BUILD_ID}</p>
+                            <p><strong>Build URL:</strong> <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a></p>
+                            <p><strong>Build Timestamp:</strong> ${env.BUILD_TIMESTAMP}</p>
                             <h3>Stages Summary:</h3>
                             <ul>
                                 <li>Unit Tests: Completed</li>
                                 <li>Checkstyle Analysis: Completed</li>
                                 <li>SonarQube Analysis: Passed</li>
                                 <li>Quality Gate: Passed</li>
-                                <li>Docker Image: Built and Pushed</li>
                                 <li>Artifact Upload: Successful</li>
                             </ul>
                             <p>Check console output for detailed information.</p>
@@ -199,7 +149,7 @@ pipeline {
                 attachLog: true
             )
         }
-
+        
         failure {
             emailext (
                 subject: "❌ [FAILED] Pipeline: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
@@ -209,9 +159,13 @@ pipeline {
                             <h2 style="color: red;">Build Failed!</h2>
                             <p><strong>Pipeline:</strong> ${env.JOB_NAME}</p>
                             <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
+                            <p><strong>Build ID:</strong> ${env.BUILD_ID}</p>
                             <p><strong>Build URL:</strong> <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a></p>
+                            <p><strong>Build Timestamp:</strong> ${env.BUILD_TIMESTAMP}</p>
                             <p><strong>Failed Stage:</strong> ${currentBuild.result}</p>
-                            <p>Check console output for error details.</p>
+                            <p>Check console output attached for error details.</p>
+                            <h3>Last Successful Build:</h3>
+                            <p><strong>Build Number:</strong> ${currentBuild.previousSuccessfulBuild?.number ?: 'None'}</p>
                         </body>
                     </html>
                 """,
@@ -220,18 +174,12 @@ pipeline {
                 attachLog: true
             )
         }
-
+        
         always {
-            echo 'Sending Slack Notifications'
-            slackSend channel: '#devops-cicd',
+            echo 'Slack Notifications.'
+            slackSend channel: '#devops-vidhya-ci',
                 color: COLOR_MAP[currentBuild.currentResult],
                 message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
-            
-            // Clean up Docker images to prevent disk space issues
-            sh '''
-                docker rmi ${DOCKER_IMAGE_TAG} || true
-                docker rmi ${DOCKERHUB_CREDENTIALS_USR}/${DOCKER_IMAGE_TAG} || true
-            '''
         }
     }
 }
